@@ -134,12 +134,22 @@ if __name__ == "__main__":
         help="The path of the truststore file.",
         type=str,
     )
+
+    parser.add_argument(
+        "-n",
+        "--truststore-secret-name",
+        help="The name of the truststore secret.",
+        type=str,
+        default=f"{HUB_LABEL}-truststore",
+    )
+
     args = parser.parse_args()
     logger.info("Start process that update service account secrets.")
     client = Client(field_manager=args.app_name)  # type: ignore
     label_selector: dict[str, LabelValue] = {"app.kubernetes.io/managed-by": "spark8t"}
     allowlist_path = Path(args.allowlist)
     truststore_path = Path(args.truststore) if args.truststore else None
+    truststore_secret_name = args.truststore_secret_name
     try:
         with allowlist_path.open("r") as f:
             allowlist = [entry.strip() for entry in f.read().splitlines()]
@@ -181,7 +191,7 @@ if __name__ == "__main__":
             logger.info("Empty configuration. No secret to update.")
 
         secret_name = f"{HUB_LABEL}-{sa_name}"
-        secret_name_truststore = f"{HUB_LABEL}-{sa_name}-truststore"
+        # secret_name_truststore = f"{HUB_LABEL}-{sa_name}-truststore"
         # if secret is already there, delete it.
         try:
             s = client.get(Secret, name=secret_name, namespace=namespace)
@@ -189,9 +199,9 @@ if __name__ == "__main__":
             client.delete(Secret, name=secret_name, namespace=namespace)
             # update trustore secret if the file path is provided in the configuration.
             if truststore_path:
-                s_truststore = client.get(Secret, name=secret_name_truststore, namespace=namespace)
+                s_truststore = client.get(Secret, name=truststore_secret_name, namespace=namespace)
                 print(f"retrieved truststore secrets: {s_truststore}")
-                client.delete(Secret, name=secret_name_truststore, namespace=namespace)
+                client.delete(Secret, name=truststore_secret_name, namespace=namespace)
         except ApiError as e:
             logger.info(f"Api error: {e}")
 
@@ -217,9 +227,9 @@ if __name__ == "__main__":
 
         # Create secret for truststore if the file path is provided in the configuration.
         if truststore_path:
-            logger.info(f"Updating secret for truststore: {secret_name_truststore}")
+            logger.info(f"Updating secret for truststore: {truststore_secret_name}")
             truststore_secret = create_secret_from_file(
-                secret_name_truststore, truststore_path, namespace
+                truststore_secret_name, truststore_path, namespace
             )
             client.create(truststore_secret)
 
