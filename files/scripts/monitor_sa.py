@@ -198,7 +198,7 @@ if __name__ == "__main__":
             print(f"retrieved secrets: {s}")
             client.delete(Secret, name=secret_name, namespace=namespace)
             # update trustore secret if the file path is provided in the configuration.
-            if truststore_path:
+            if truststore_path and Path(truststore_path).exists():
                 s_truststore = client.get(Secret, name=truststore_secret_name, namespace=namespace)
                 print(f"retrieved truststore secrets: {s_truststore}")
                 client.delete(Secret, name=truststore_secret_name, namespace=namespace)
@@ -226,7 +226,7 @@ if __name__ == "__main__":
         client.create(s)
 
         # Create secret for truststore if the file path is provided in the configuration.
-        if truststore_path:
+        if truststore_path and Path(truststore_path).exists():
             logger.info(f"Updating secret for truststore: {truststore_secret_name}")
             truststore_secret = create_secret_from_file(
                 truststore_secret_name, truststore_path, namespace

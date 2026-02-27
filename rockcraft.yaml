@@ -30,6 +30,7 @@ services:
     environment:
       SPARK_PROPERTIES_FILE: /etc/hub/conf/spark-defaults.conf
       SA_ALLOWLIST: /etc/hub/conf/allowlist
+      TRUSTSTORE_PATH: /etc/hub/conf/truststore.jks
 
 parts:
   spark8t:
