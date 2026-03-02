@@ -160,7 +160,7 @@ if __name__ == "__main__":
         allowlist = []
 
     patterns = build_patterns(allowlist)
-
+    logger.info(f"Patterns: {patterns}")
     for op, sa in client.watch(
         ServiceAccount,
         namespace="*",
@@ -176,7 +176,7 @@ if __name__ == "__main__":
         logger.info(f"Service account: {sa_name} --- namespace: {namespace}")
 
         if not is_allowed(ServiceAccountNames(namespace, sa_name), patterns):
-            logger.info("Not allowed, skipping.")
+            logger.info(f"{namespace}:{sa_name} NOT allowed, skipping.")
             continue
 
         # skip in case of deletion or operation that do not need secret update.
