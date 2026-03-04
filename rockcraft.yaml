@@ -32,6 +32,7 @@ services:
       SPARK_PROPERTIES_FILE: /etc/hub/conf/spark-defaults.conf
       SA_ALLOWLIST: /etc/hub/conf/allowlist
       TRUSTSTORE_PATH: /etc/hub/conf/truststore.jks
+      TRUSTSTORE_SECRET_NAME: integrator-hub-conf-truststore
 
 parts:
   spark8t:
