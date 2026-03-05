@@ -153,7 +153,7 @@ if __name__ == "__main__":
     label_selector: dict[str, LabelValue] = {"app.kubernetes.io/managed-by": "spark8t"}
     allowlist_path = Path(args.allowlist)
     truststore_path = Path(args.truststore) if args.truststore else None
-    truststore_secret_name_prefix = args.truststore_secret_name
+    truststore_secret_name = args.truststore_secret_name
     try:
         with allowlist_path.open("r") as f:
             allowlist = [entry.strip() for entry in f.read().splitlines()]
@@ -195,8 +195,7 @@ if __name__ == "__main__":
             logger.info("Empty configuration. No secret to update.")
 
         secret_name = f"{HUB_LABEL}-{sa_name}"
-        truststore_secret_name = f"{truststore_secret_name_prefix}-{sa_name}"
-        # secret_name_truststore = f"{HUB_LABEL}-truststore-{sa_name}"
+
         # if secret is already there, delete it.
         try:
             s = client.get(Secret, name=secret_name, namespace=namespace)
