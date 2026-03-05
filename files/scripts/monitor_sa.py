@@ -88,7 +88,11 @@ def create_secret_from_file(secret_name: str, file_path: Path, namespace: str) -
 
     # Construct the Secret object
     secret = Secret(
-        metadata=ObjectMeta(name=secret_name, namespace=namespace),
+        metadata=ObjectMeta(
+            name=secret_name,
+            namespace=namespace,
+            labels={"app.kubernetes.io/managed-by": "integration-hub"},
+        ),
         type="Opaque",
         data={file_key: encoded_content},
     )
@@ -160,7 +164,7 @@ if __name__ == "__main__":
         allowlist = []
 
     patterns = build_patterns(allowlist)
-    logger.info(f"Patterns: {patterns}")
+
     for op, sa in client.watch(
         ServiceAccount,
         namespace="*",
