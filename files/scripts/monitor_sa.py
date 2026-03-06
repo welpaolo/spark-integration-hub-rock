@@ -199,13 +199,22 @@ if __name__ == "__main__":
         # if secret is already there, delete it.
         try:
             s = client.get(Secret, name=secret_name, namespace=namespace)
-            print(f"retrieved secrets: {s}")
+            logger.info(f"retrieved secrets: {s}")
             client.delete(Secret, name=secret_name, namespace=namespace)
             # update trustore secret if the file path is provided in the configuration.
             if truststore_path and Path(truststore_path).exists():
-                # truststore_secret_name = f"{truststore_secret_name_prefix}-{sa_name}"
-                print(f"retrieved truststore secrets: {truststore_secret_name}")
-                client.delete(Secret, name=truststore_secret_name, namespace=namespace)
+                # we need to delete the truststore secret only if there is no other service account that needs it.
+                # for simplicity, we check if there exist other labeled service account in the same namespace.
+                sa_list = client.list(ServiceAccount, namespace=namespace, labels=label_selector)
+                sa_len = sum(1 for _ in sa_list)
+                logger.info(
+                    f"Number of service accounts with label {label_selector} in namespace {namespace}: {sa_len}"
+                )
+                if sa_len == 0:
+                    logger.info(
+                        f"Deleting truststore secret: {truststore_secret_name} in namespace {namespace} since there is no service account that needs it."
+                    )
+                    client.delete(Secret, name=truststore_secret_name, namespace=namespace)
         except ApiError as e:
             logger.info(f"Api error: {e}")
 
