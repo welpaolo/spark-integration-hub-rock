@@ -215,6 +215,13 @@ if __name__ == "__main__":
                         f"Deleting truststore secret: {truststore_secret_name} in namespace {namespace} since there is no service account that needs it."
                     )
                     client.delete(Secret, name=truststore_secret_name, namespace=namespace)
+            else:
+                # remove the truststore secret if the file path is not provided in the configuration, as it means the truststore is not needed anymore.
+                if client.get(Secret, name=truststore_secret_name, namespace=namespace):
+                    logger.info(
+                        f"Deleting truststore secret: {truststore_secret_name} in namespace {namespace} since the truststore is not needed anymore."
+                    )
+                    client.delete(Secret, name=truststore_secret_name, namespace=namespace)
         except ApiError as e:
             logger.info(f"Api error: {e}")
 
