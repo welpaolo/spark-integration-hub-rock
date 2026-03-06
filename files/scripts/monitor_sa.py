@@ -248,6 +248,13 @@ if __name__ == "__main__":
         # Create secret for truststore if the file path is provided in the configuration.
         if truststore_path and Path(truststore_path).exists():
             logger.info(f"Updating secret for truststore: {truststore_secret_name}")
+            # Check if the secret already exists, if yes, we delete and re-create it.
+            if client.get(Secret, name=truststore_secret_name, namespace=namespace):
+                logger.info(
+                    f"Truststore secret: {truststore_secret_name} already exists in namespace {namespace}, deleting it."
+                )
+                client.delete(Secret, name=truststore_secret_name, namespace=namespace)
+            # create the secret for truststore.
             truststore_secret = create_secret_from_file(
                 truststore_secret_name, truststore_path, namespace
             )
