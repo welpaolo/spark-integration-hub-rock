@@ -11,13 +11,14 @@ base: ubuntu@22.04
 
 platforms:
   amd64:
-  arm64:
+  # arm64:
 
 run_user: _daemon_
 
 environment:
   PYTHONPATH: /opt/spark/python:/opt/spark8t/python/dist:/usr/lib/python3.10/site-packages
   PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+  JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
 services:
   integration-hub:
@@ -30,6 +31,8 @@ services:
     environment:
       SPARK_PROPERTIES_FILE: /etc/hub/conf/spark-defaults.conf
       SA_ALLOWLIST: /etc/hub/conf/allowlist
+      TRUSTSTORE_PATH: /etc/hub/conf/truststore.jks
+      TRUSTSTORE_SECRET_NAME: integrator-hub-conf-truststore
 
 parts:
   spark8t:
@@ -86,6 +89,7 @@ parts:
     after: [hub-files]
     overlay-packages:
       - python3
+      - openjdk-17-jre-headless
 
     override-prime: |
       # Please refer to https://discourse.ubuntu.com/t/unifying-user-identity-across-snaps-and-rocks/36469

@@ -5,6 +5,7 @@
 """Routine that updates secrets for Spark service accounts."""
 
 import argparse
+import base64
 import fnmatch
 import logging
 import os
@@ -15,6 +16,7 @@ from typing import NamedTuple, cast
 
 from lightkube.core.client import Client, LabelValue
 from lightkube.core.exceptions import ApiError
+from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import Secret, ServiceAccount
 from spark8t.domain import PropertyFile
 from spark8t.literals import HUB_LABEL
@@ -72,6 +74,32 @@ def is_allowed(
     )
 
 
+def create_secret_from_file(secret_name: str, file_path: Path, namespace: str) -> Secret:
+    """Create a Kubernetes Secret object from a file."""
+    # Read the file content
+    with file_path.open("rb") as f:
+        file_content = f.read()
+
+    # The output needs to be a decoded utf-8 string for the JSON serialization
+    encoded_content = base64.b64encode(file_content).decode("utf-8")
+
+    # Extract the filename to use as the key (default kubectl behavior)
+    file_key = os.path.basename(file_path)
+
+    # Construct the Secret object
+    secret = Secret(
+        metadata=ObjectMeta(
+            name=secret_name,
+            namespace=namespace,
+            labels={"app.kubernetes.io/managed-by": "integration-hub"},
+        ),
+        type="Opaque",
+        data={file_key: encoded_content},
+    )
+
+    return secret
+
+
 if __name__ == "__main__":
     logger.info("Start process")
     parser = argparse.ArgumentParser(
@@ -104,11 +132,28 @@ if __name__ == "__main__":
         default=TIMEOUT_DEFAULT_SECONDS,
         type=int,
     )
+    parser.add_argument(
+        "-s",
+        "--truststore",
+        help="The path of the truststore file.",
+        type=str,
+    )
+
+    parser.add_argument(
+        "-n",
+        "--truststore-secret-name",
+        help="The name of the truststore secret.",
+        type=str,
+        default=f"{HUB_LABEL}-truststore",
+    )
+
     args = parser.parse_args()
     logger.info("Start process that update service account secrets.")
     client = Client(field_manager=args.app_name)  # type: ignore
     label_selector: dict[str, LabelValue] = {"app.kubernetes.io/managed-by": "spark8t"}
     allowlist_path = Path(args.allowlist)
+    truststore_path = Path(args.truststore) if args.truststore else None
+    truststore_secret_name = args.truststore_secret_name
     try:
         with allowlist_path.open("r") as f:
             allowlist = [entry.strip() for entry in f.read().splitlines()]
@@ -135,7 +180,7 @@ if __name__ == "__main__":
         logger.info(f"Service account: {sa_name} --- namespace: {namespace}")
 
         if not is_allowed(ServiceAccountNames(namespace, sa_name), patterns):
-            logger.info("Not allowed, skipping.")
+            logger.info(f"{namespace}:{sa_name} NOT allowed, skipping.")
             continue
 
         # skip in case of deletion or operation that do not need secret update.
@@ -150,11 +195,33 @@ if __name__ == "__main__":
             logger.info("Empty configuration. No secret to update.")
 
         secret_name = f"{HUB_LABEL}-{sa_name}"
+
         # if secret is already there, delete it.
         try:
             s = client.get(Secret, name=secret_name, namespace=namespace)
-            print(f"retrieved secrets: {s}")
+            logger.info(f"retrieved secrets: {s}")
             client.delete(Secret, name=secret_name, namespace=namespace)
+            # update trustore secret if the file path is provided in the configuration.
+            if truststore_path and Path(truststore_path).exists():
+                # we need to delete the truststore secret only if there is no other service account that needs it.
+                # for simplicity, we check if there exist other labeled service account in the same namespace.
+                sa_list = client.list(ServiceAccount, namespace=namespace, labels=label_selector)
+                sa_len = sum(1 for _ in sa_list)
+                logger.info(
+                    f"Number of service accounts with label {label_selector} in namespace {namespace}: {sa_len}"
+                )
+                if sa_len == 0:
+                    logger.info(
+                        f"Deleting truststore secret: {truststore_secret_name} in namespace {namespace} since there is no service account that needs it."
+                    )
+                    client.delete(Secret, name=truststore_secret_name, namespace=namespace)
+            else:
+                # remove the truststore secret if the file path is not provided in the configuration, as it means the truststore is not needed anymore.
+                if client.get(Secret, name=truststore_secret_name, namespace=namespace):
+                    logger.info(
+                        f"Deleting truststore secret: {truststore_secret_name} in namespace {namespace} since the truststore is not needed anymore."
+                    )
+                    client.delete(Secret, name=truststore_secret_name, namespace=namespace)
         except ApiError as e:
             logger.info(f"Api error: {e}")
 
@@ -177,4 +244,23 @@ if __name__ == "__main__":
         )
         # Create secret
         client.create(s)
+
+        # Create secret for truststore if the file path is provided in the configuration.
+        if truststore_path and Path(truststore_path).exists():
+            logger.info(f"Updating secret for truststore: {truststore_secret_name}")
+            # Check if the secret already exists, if yes, we delete and re-create it.
+            try:
+                _ = client.get(Secret, name=truststore_secret_name, namespace=namespace)
+                logger.info(
+                    f"Truststore secret: {truststore_secret_name} already exists in namespace {namespace}, deleting it."
+                )
+                client.delete(Secret, name=truststore_secret_name, namespace=namespace)
+            except ApiError as e:
+                logger.info(f"Api error: {e}")
+            # create the secret for truststore.
+            truststore_secret = create_secret_from_file(
+                truststore_secret_name, truststore_path, namespace
+            )
+            client.create(truststore_secret)
+
         logger.info("--------------------------------------------------------")
